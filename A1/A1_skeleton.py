@@ -116,9 +116,9 @@ class A1Tokenizer:
         encoded_texts = []
 
         for text in texts:
-            # splitting
+            # splitting and adding the bos an eos token
             tokens = self.tokenize_fun (text)
-
+            tokens = [self.bos_token] + tokens + [self.eos_token]
             # convert to ids, specify the unk_token as a default value with the .get call
             ids = [self.word2id.get(token, self.unk_token_id) for token in tokens]
             encoded_texts.append(ids)
@@ -152,7 +152,7 @@ class A1Tokenizer:
 
     def __len__(self):
         """Return the size of the vocabulary."""
-        return ...
+        return len(self.word2id)
     
     def save(self, filename):
         """Save the tokenizer to the given file."""
@@ -307,12 +307,35 @@ class A1Trainer:
 
         #training the model
         for epoch in range(args.num_train_epochs):
-            for batch in train_dataset:
+            self.model.train()
+            total_loss = 0
+            for batch in train_loader:
+                texts = batch["text"]
                 # preprocessing and forward pass
-                input_ids = build_tokenizer(batch)
-                X = input_ids.pop(-1)
-                Y = input_ids
+                tokenized = self.tokenizer(
+                    texts,
+                    padding = True,
+                    truncation = True, 
+                    return_tensors = "pt"
+                    )
+                input_ids = tokenized["input_ids"]
 
+                # input and target shifted
+                X = input_ids[:, :-1]
+                Y = input_ids[:, 1:]
+                
+                # to mps
+                X.to(device)
+                Y.to(device)
+
+                # forward pass
+                output = self.model(X)
+                
+                #Loss
+
+                forward(X)
+                backward(X)
+                loss.back
 
 
 
