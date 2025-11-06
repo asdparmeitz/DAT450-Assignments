@@ -1,7 +1,4 @@
 
-from typing import Any
-
-
 import torch, nltk, pickle
 from torch import nn
 from collections import Counter
@@ -11,6 +8,13 @@ from torch.utils.data import DataLoader
 import numpy as np
 import sys, time, os
 from torch.utils.data import Subset
+
+# Ensure required NLTK tokenizers are available
+nltk.download('punkt', quiet=True)
+try:
+    nltk.download('punkt_tab', quiet=True)
+except Exception:
+    pass
 
 ###
 ### Part 1. Tokenization.
@@ -51,7 +55,7 @@ def build_tokenizer(train_file, tokenize_fun=lowercase_tokenizer, max_voc_size=N
   # user-specified hyperparameter. 
   # If the number of unique tokens in the text is greater than max_voc_size, then use the most frequent ones.
     if max_voc_size is not None:
-        num_tokens = max_voc_size - len(special_tokens)
+        num_tokens = max(0, max_voc_size - len(special_tokens))
         most_frequent_tokens = token_counts.most_common(num_tokens)
     else:
         most_frequent_tokens = token_counts.most_common()
@@ -170,15 +174,19 @@ class A1Tokenizer:
 ### Part 3. Defining the model.
 ###
 
-dataset = load_dataset('text', data_files={'train': "train.txt", 'val': "val.txt"})
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+train_path = os.path.join(SCRIPT_DIR, "train.txt")
+val_path = os.path.join(SCRIPT_DIR, "val.txt")
+
+dataset = load_dataset('text', data_files={'train': train_path, 'val': val_path})
 dataset = dataset.filter(lambda x: x['text'].strip() != '')
 
 print(len(dataset["train"]))
 for sec in ['train', 'val']:
     dataset[sec] = Subset(dataset[sec], range(1000))
 
-train_loader = DataLoader(dataset["train"], batch_size=32, shuffle=True)
-val_loader = DataLoader(dataset["val"], batch_size=32, shuffle=False)
+# train_loader = DataLoader(dataset["train"], batch_size=32, shuffle=True)
+# val_loader = DataLoader(dataset["val"], batch_size=32, shuffle=False)
 
 
 class A1RNNModelConfig(PretrainedConfig):
@@ -198,6 +206,7 @@ class A1RNNModel(PreTrainedModel):
         self.embedding = nn.Embedding(config.vocab_size, config.embedding_size)
         self.rnn = nn.LSTM(config.embedding_size, config.hidden_size, batch_first=True)
         self.unembedding = nn.Linear(config.hidden_size, config.vocab_size)
+        self.post_init()
         
     def forward(self, X):
         """The forward pass of the RNN-based language model.
@@ -305,37 +314,53 @@ class A1Trainer:
         #       loss.backward()
         #       optimizer.step()
 
-        #training the model
+        V = self.model.config.vocab_size
+
         for epoch in range(args.num_train_epochs):
             self.model.train()
-            total_loss = 0
+            train_loss_sum, train_tok = 0.0, 0
+
             for batch in train_loader:
                 texts = batch["text"]
-                # preprocessing and forward pass
-                tokenized = self.tokenizer(
-                    texts,
-                    padding = True,
-                    truncation = True, 
-                    return_tensors = "pt"
-                    )
-                input_ids = tokenized["input_ids"]
+                enc = self.tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
+                input_ids = enc["input_ids"].to(device)
 
-                # input and target shifted
                 X = input_ids[:, :-1]
                 Y = input_ids[:, 1:]
-                
-                # to mps
-                X.to(device)
-                Y.to(device)
 
-                # forward pass
-                output = self.model(X)
-                
-                #Loss
+                logits = self.model(X)
+                loss = loss_func(logits.reshape(-1, V), Y.reshape(-1))
 
-                forward(X)
-                backward(X)
-                loss.back
+                optimizer.zero_grad(set_to_none=True)
+                loss.backward()
+                optimizer.step()
+
+                with torch.no_grad():
+                    num_tokens = (Y != self.tokenizer.pad_token_id).sum().item()
+                    train_loss_sum += loss.item() * num_tokens
+                    train_tok += num_tokens
+
+            # Validation
+            self.model.eval()
+            with torch.no_grad():
+                val_loss_sum, val_tok = 0.0, 0
+                for batch in val_loader:
+                    texts = batch["text"]
+                    enc = self.tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
+                    ids = enc["input_ids"].to(device)
+                    Xv, Yv = ids[:, :-1], ids[:, 1:]
+                    logits = self.model(Xv)
+                    loss_v = loss_func(logits.reshape(-1, V), Yv.reshape(-1))
+                    num_tokens = (Yv != self.tokenizer.pad_token_id).sum().item()
+                    val_loss_sum += loss_v.item() * num_tokens
+                    val_tok += num_tokens
+
+            train_ce = train_loss_sum / max(1, train_tok)
+            val_ce = val_loss_sum / max(1, val_tok)
+            train_ppl = float(np.exp(train_ce))
+            val_ppl = float(np.exp(val_ce))
+            print(f"Epoch {epoch+1}: train CE={train_ce:.4f} PPL={train_ppl:.1f} | val CE={val_ce:.4f} PPL={val_ppl:.1f}")
+            self.model.train()
 
 
 
@@ -344,8 +369,67 @@ class A1Trainer:
 
     
 
-dataset = load_dataset('text', data_files={'train': "train.txt", 'val': "val.txt"})
-dataset = dataset.filter(lambda x: x['text'].strip() != '')
-
 train_dataset = dataset["train"]
 eval_dataset = dataset["val"]
+
+tokenizer = build_tokenizer(
+    train_file=train_path,
+    tokenize_fun=lowercase_tokenizer,
+    max_voc_size=30000,
+    model_max_length=256,
+    pad_token='<PAD>',
+    unk_token='<UNK>',
+    bos_token='<BOS>',
+    eos_token='<EOS>'
+)
+
+config = A1RNNModelConfig(
+    vocab_size=len(tokenizer),
+    embedding_size=256,
+    hidden_size=512
+)
+
+model = A1RNNModel(config)
+
+
+class TrainingArguments:
+    def __init__(self):
+        self.optim = 'adamw_torch'
+        self.eval_strategy = 'epoch'
+        self.use_cpu = False
+        self.no_cuda = False
+        self.learning_rate = 2e-3
+        self.num_train_epochs = 1
+        self.per_device_train_batch_size = 32
+        self.per_device_eval_batch_size = 32
+        self.output_dir = 'trainer_output'
+
+
+args = TrainingArguments()
+
+trainer = A1Trainer(
+    model=model,
+    args=args,
+    train_dataset=train_dataset,
+    eval_dataset=eval_dataset,
+    tokenizer=tokenizer
+)
+
+trainer.train()
+
+
+def predict_next(tokenizer: A1Tokenizer, model: PreTrainedModel, text: str, device: torch.device, k: int = 5):
+    model.eval()
+    with torch.no_grad():
+        enc = tokenizer(text, return_tensors='pt', padding=False, truncation=True)
+        ids = enc["input_ids"].to(device)
+        X = ids[:, :-1]
+        logits = model(X)
+        last_logits = logits[:, -1, :]
+        topk = torch.topk(last_logits, k=k, dim=-1)
+        idxs = topk.indices[0].tolist()
+        return [tokenizer.id2word.get(i, tokenizer.unk_token) for i in idxs]
+
+
+device = trainer.select_device()
+print("Next-word top-5:", predict_next(tokenizer, model, "She lives in San", device))
