@@ -5,7 +5,7 @@ from transformers import PreTrainedModel, PretrainedConfig
 
 
 class A2ModelConfig(PretrainedConfig):
-    """Configuration object that stores hyperparameters that define the Transformer language model."""
+    """Configuration object that stores hyperparameters that define the Transformer language model"""
     def __init__(self, vocab_size=None, hidden_size=None, intermediate_size=None, num_attention_heads=None, 
                  num_hidden_layers=None,
                  rope_theta=None, hidden_act='silu', max_position_embeddings=None, rms_norm_eps=None, **kwargs):
@@ -23,26 +23,34 @@ class A2ModelConfig(PretrainedConfig):
 
 
 class A2MLP(nn.Module):
-    """The MLP layer of the Transformer. Uses the SwiGLU architecture."""
+    """The MLP layer of the Transformer. Uses the SwiGLU architecture.
+    SwiGLU: https://arxiv.org/pdf/2002.05202
+    The input and output are the same size. (hidden_size)"""
     def __init__(self, config):
         super().__init__()
         assert(config.hidden_act == 'silu')
-        # TODO: initalize components here
+        self.gate_w = nn.Linear(config.hidden_size, config.intermediate_size, bias=False)   
+        self.up_w = nn.Linear(config.hidden_size, config.intermediate_size, bias=False)
+        self.combining_w = nn.Linear(config.intermediate_size, config.hidden_size, bias=False)
 
     def forward(self, hidden_states):
-        ...
+        gate = nn.functional.silu(self.gate_w(hidden_states))
+        up = self.up_w(hidden_states)
+        return self.combining_w(gate * up)
+
 
 # This is optional, since you can use PyTorch's RMSNorm.
 class A2RMSNorm(nn.Module):
     """RMS layer normalization."""
     def __init__(self, config):
         super().__init__()
-        # TODO: Use config.rms_norm_eps
-        # TODO: initalize weights here
+        self.eps = config.rms_norm_eps
+        self.weight = nn.Parameter(torch.ones(config.hidden_size))
 
     def forward(self, hidden_states):
-        ...
-
+        variance = hidden_states.pow(2).mean(-1, keepdim=True)
+        rms = torch.sqrt(variance + self.eps)
+        return self.weight * hidden_states / rms
 
 class A2Attention(nn.Module):
     """The multi-head attention layer of the Transformer. Uses standard scaled dot-product attention with causal masking."""
