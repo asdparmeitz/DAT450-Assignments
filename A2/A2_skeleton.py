@@ -57,21 +57,79 @@ class A2Attention(nn.Module):
     
     def __init__(self, config):
         super().__init__()
-        # TODO: set up W_q, W_k, W_v, W_o here
-        # TODO: set up normalizers here
+        self.num_attention_heads = config.num_attention_heads
+        self.hidden_size = config.hidden_size
+        self.head_dim = config.hidden_size // config.num_attention_heads
+        
+        # Linear layers for query, key, value, and output projections (no bias)
+        self.W_q = nn.Linear(config.hidden_size, config.hidden_size, bias=False)
+        self.W_k = nn.Linear(config.hidden_size, config.hidden_size, bias=False)
+        self.W_v = nn.Linear(config.hidden_size, config.hidden_size, bias=False)
+        self.W_o = nn.Linear(config.hidden_size, config.hidden_size, bias=False)
+        
+        # Normalizers after query and key representations
+        self.q_norm = A2RMSNorm(config)
+        self.k_norm = A2RMSNorm(config)
 
     def forward(self, hidden_states, rope_rotations):
-        ...
+        b, m, d = hidden_states.shape  # batch, sequence length, hidden size
+        n_h = self.num_attention_heads
+        d_h = self.head_dim
+        
+        # Compute query, key, and value representations
+        q = self.W_q(hidden_states)
+        k = self.W_k(hidden_states)
+        v = self.W_v(hidden_states)
+        
+        # Apply normalizers to query and key
+        q = self.q_norm(q)
+        k = self.k_norm(k)
+        
+        # Reshape for multi-head attention: (b, m, n_h, d_h) then transpose to (b, n_h, m, d_h)
+        q = q.view(b, m, n_h, d_h).transpose(1, 2)
+        k = k.view(b, m, n_h, d_h).transpose(1, 2)
+        v = v.view(b, m, n_h, d_h).transpose(1, 2)
+        
+        # Apply RoPE rotations to query and key
+        q, k = apply_rotary_pos_emb(q, k, rope_rotations)
+        
+        # Compute scaled dot-product attention with causal masking
+        attn_out = nn.functional.scaled_dot_product_attention(q, k, v, is_causal=True)
+        
+        # Combine attention heads: transpose to (b, m, n_h, d_h) then reshape to (b, m, d)
+        attn_out = attn_out.transpose(1, 2).reshape(b, m, d)
+        
+        # Apply output projection
+        output = self.W_o(attn_out)
+        
+        return output
 
 
 class A2DecoderLayer(nn.Module):
     """A complete Transformer decoder layer."""
     def __init__(self, config):
         super().__init__()
-        # TODO: set up attention, MLP, and normalizers here.
+        # Normalizer before attention (pre-norm)
+        self.pre_attention_norm = A2RMSNorm(config)
+        # Multi-head attention layer
+        self.attention = A2Attention(config)
+        # Normalizer before MLP (pre-norm)
+        self.pre_mlp_norm = A2RMSNorm(config)
+        # MLP layer
+        self.mlp = A2MLP(config)
 
     def forward(self, hidden_states, rope_rotations):
-        ...
+        # Pre-norm attention with residual connection
+        attn_input = self.pre_attention_norm(hidden_states)
+        attn_output = self.attention(attn_input, rope_rotations)
+        hidden_states = attn_output + hidden_states  # residual connection
+        
+        # Pre-norm MLP with residual connection
+        mlp_input = self.pre_mlp_norm(hidden_states)
+        mlp_output = self.mlp(mlp_input)
+        hidden_states = mlp_output + hidden_states  # residual connection
+        
+        return hidden_states
 
 
 class A2Transformer(PreTrainedModel):
@@ -83,8 +141,20 @@ class A2Transformer(PreTrainedModel):
         super().__init__(config)
 
         self.rotary_emb = A2RotaryEmbedding(config)
-        # TODO: Set up the other components here.
-        # TODO: put all transformer decoder layers in a ModuleList.
+        
+        # Token embedding layer (vocab_size -> hidden_size)
+        self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size)
+        
+        # Transformer decoder layers in a ModuleList
+        self.layers = nn.ModuleList([
+            A2DecoderLayer(config) for _ in range(config.num_hidden_layers)
+        ])
+        
+        # Final normalizer
+        self.norm = A2RMSNorm(config)
+        
+        # Unembedding layer (hidden_size -> vocab_size, no bias)
+        self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
 
         # This line should be called after you have set up all components.
         self.post_init()
@@ -93,8 +163,20 @@ class A2Transformer(PreTrainedModel):
     def forward(self, input_ids):
         rope_rotations = self.rotary_emb(input_ids) # pass this to all the transformer decoder layers
 
-        # TODO: Call embedding, transformer decoder layers, last normalizer, and unembedding.
-        ...
+        # Apply token embeddings
+        hidden_states = self.embed_tokens(input_ids)
+        
+        # Pass through all transformer decoder layers
+        for layer in self.layers:
+            hidden_states = layer(hidden_states, rope_rotations)
+        
+        # Apply final normalizer
+        hidden_states = self.norm(hidden_states)
+        
+        # Apply unembedding to get logits
+        logits = self.lm_head(hidden_states)
+        
+        return logits
 
 
 #### RoPE implementation (copied and simplified from HuggingFace). ####
@@ -143,3 +225,21 @@ class A2RotaryEmbedding(nn.Module):
             cos = emb.cos()
             sin = emb.sin()
             return cos, sin
+
+
+#### Simple test code ####
+
+if __name__ == "__main__":
+    # Create a simple configuration for testing
+    config = A2ModelConfig(
+        vocab_size=1000,
+        hidden_size=128,
+        intermediate_size=256,
+        num_attention_heads=4,
+        num_hidden_layers=2,
+        rope_theta=10000.0,
+        hidden_act='silu',
+        max_position_embeddings=512,
+        rms_norm_eps=1e-6
+    )
+    

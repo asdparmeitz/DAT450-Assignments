@@ -360,58 +360,6 @@ class A1Trainer:
 
     
 
-train_dataset = dataset["train"]
-eval_dataset = dataset["val"]
-
-tokenizer = build_tokenizer(
-    train_file=train_path,
-    tokenize_fun=lowercase_tokenizer,
-    max_voc_size=30000,
-    model_max_length=256,
-    pad_token='<PAD>',
-    unk_token='<UNK>',
-    bos_token='<BOS>',
-    eos_token='<EOS>'
-)
-
-config = A1RNNModelConfig(
-    vocab_size=len(tokenizer),
-    embedding_size=256,
-    hidden_size=512
-)
-
-model = A1RNNModel(config)
-
-
-class TrainingArguments:
-    def __init__(self):
-        self.optim = 'adamw_torch'
-        self.eval_strategy = 'epoch'
-        self.use_cpu = False
-        self.no_cuda = False
-        self.learning_rate = 2e-3
-        self.num_train_epochs = 3
-        self.per_device_train_batch_size = 32
-        self.per_device_eval_batch_size = 32
-        self.output_dir = 'trainer_output'
-
-
-args = TrainingArguments()
-
-trainer = A1Trainer(
-    model=model,
-    args=args,
-    train_dataset=train_dataset,
-    eval_dataset=eval_dataset,
-    tokenizer=tokenizer
-)
-
-trainer.train()
-
-# Save tokenizer
-tokenizer.save('tokenizer.pkl')
-
-
 def predict_next(tokenizer: A1Tokenizer, model: PreTrainedModel, text: str, device: torch.device, k: int = 5):
     model.eval()
     with torch.no_grad():
@@ -424,11 +372,65 @@ def predict_next(tokenizer: A1Tokenizer, model: PreTrainedModel, text: str, devi
         idxs = topk.indices[0].tolist()
         return [tokenizer.id2word.get(i, tokenizer.unk_token) for i in idxs]
 
-device = trainer.select_device()
-# Test predictions
-test = [
-    "She lives in San"
-]
 
-top5 = predict_next(tokenizer, model, test, device, k=5)
-print(f"{test} → {top5}")
+if __name__ == "__main__":
+    # Only execute training code when A1.py is run directly, not when imported
+    train_dataset = dataset["train"]
+    eval_dataset = dataset["val"]
+
+    tokenizer = build_tokenizer(
+        train_file=train_path,
+        tokenize_fun=lowercase_tokenizer,
+        max_voc_size=30000,
+        model_max_length=256,
+        pad_token='<PAD>',
+        unk_token='<UNK>',
+        bos_token='<BOS>',
+        eos_token='<EOS>'
+    )
+
+    config = A1RNNModelConfig(
+        vocab_size=len(tokenizer),
+        embedding_size=256,
+        hidden_size=512
+    )
+
+    model = A1RNNModel(config)
+
+
+    class TrainingArguments:
+        def __init__(self):
+            self.optim = 'adamw_torch'
+            self.eval_strategy = 'epoch'
+            self.use_cpu = False
+            self.no_cuda = False
+            self.learning_rate = 2e-3
+            self.num_train_epochs = 3
+            self.per_device_train_batch_size = 32
+            self.per_device_eval_batch_size = 32
+            self.output_dir = 'trainer_output'
+
+
+    args = TrainingArguments()
+
+    trainer = A1Trainer(
+        model=model,
+        args=args,
+        train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
+        tokenizer=tokenizer
+    )
+
+    trainer.train()
+
+    # Save tokenizer
+    tokenizer.save('tokenizer.pkl')
+
+    # Test predictions
+    device = trainer.select_device()
+    test = [
+        "She lives in San"
+    ]
+
+    top5 = predict_next(tokenizer, model, test, device, k=5)
+    print(f"{test} → {top5}")
