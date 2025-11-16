@@ -24,7 +24,6 @@ class A2ModelConfig(PretrainedConfig):
 
 class A2MLP(nn.Module):
     """The MLP layer of the Transformer. Uses the SwiGLU architecture.
-    SwiGLU: https://arxiv.org/pdf/2002.05202
     The input and output are the same size. (hidden_size)"""
     def __init__(self, config):
         super().__init__()
