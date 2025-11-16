@@ -24,7 +24,6 @@ class A2ModelConfig(PretrainedConfig):
 
 class A2MLP(nn.Module):
     """The MLP layer of the Transformer. Uses the SwiGLU architecture.
-    SwiGLU: https://arxiv.org/pdf/2002.05202
     The input and output are the same size. (hidden_size)"""
     def __init__(self, config):
         super().__init__()
@@ -57,21 +56,84 @@ class A2Attention(nn.Module):
     
     def __init__(self, config):
         super().__init__()
-        # TODO: set up W_q, W_k, W_v, W_o here
-        # TODO: set up normalizers here
+
+        assert config.hidden_size % config.num_attention_heads == 0
+        self.hidden_size = config.hidden_size
+        self.num_attention_heads = config.num_attention_heads
+        self.head_dim = self.hidden_size // self.num_attention_heads
+
+        self.W_q = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
+        self.W_k = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
+        self.W_v = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
+        self.W_o = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
+
+        self.norm_q = A2RMSNorm(self.hidden_size)
+        self.norm_k = A2RMSNorm(self.hidden_size)
+
 
     def forward(self, hidden_states, rope_rotations):
-        ...
+        
+        b, m, d = hidden_states.shape
+        n_h = self.num_attention_heads
+        d_h = self.head_dim
+
+        # Compute 
+        query = self.W_q(hidden_states)
+        key = self.W_k(hidden_states)
+        value = self.W_v(hidden_states)
+        
+        #normalize the query and key
+        query = self.norm_q(query)
+        key = self.norm_k(key)
+
+        # Reshape the vectors into right dimensions for the attention
+        query = query.view(b, m, n_h, d_h).transpose(1, 2)
+        key = key.view(b, m, n_h, d_h).transpose(1, 2)
+        value = value.view(b, m, n_h, d_h).transpose(1, 2)
+
+
+        # Apply RoPE to the query and key
+        query, key = apply_rotary_pos_emb(query, key, rope_rotations)
+
+        # SDPA 
+        attention_output = torch.nn.functional.scaled_dot_product_attention(
+            query, key, value, is_causal = True)
+        
+        #computation 3
+        attention_output = attention_output.transpose(1, 2).reshape(b, m, d)
+
+        return  self.W_o(attention_output)
+
+
 
 
 class A2DecoderLayer(nn.Module):
     """A complete Transformer decoder layer."""
     def __init__(self, config):
         super().__init__()
-        # TODO: set up attention, MLP, and normalizers here.
+        self.attention_layer = A2Attention(config)
+        self.rms_norm_1 = A2RMSNorm(config.hidden_size)
+        self.mlp_layer = A2MLP(config)
+        self.rms_norm_2 = A2RMSNorm(config.hidden_size)
+
 
     def forward(self, hidden_states, rope_rotations):
-        ...
+
+        # Attention + first normalization
+        attention_output = self.attention_layer(hidden_states, rope_rotations)
+        normalized_attention_output = self.rms_norm_1(attention_output)
+
+        #residual connection 1
+        hidden_states = hidden_states + normalized_attention_output
+
+        # MLP + second normalization
+        mlp_output = self.mlp_layer(hidden_states)
+        normalized_mlp_output = self.rms_norm_2(mlp_output)
+
+        #residual connection 2
+        hidden_states = hidden_states + normalized_mlp_output
+
+        return hidden_states
 
 
 class A2Transformer(PreTrainedModel):
