@@ -12,8 +12,8 @@ __pycache__/
 # Large model files - tracked with Git LFS (see .gitattributes)
 # *.safetensors  # Tracked with Git LFS
 # *.bin          # Tracked with Git LFS
-trainer_output/  # Exclude directory, but files inside can be tracked if needed
-checkpoints/
+#trainer_output/  # Exclude directory, but files inside can be tracked if needed
+#checkpoints/
 
 # Tokenizer files - tracked with Git LFS (see .gitattributes)
 # *.pkl          # Tracked with Git LFS
