@@ -1,0 +1,73 @@
+
+Final vcalidaiton CE and Perplexity after 5 epochs:
+
+Train CE=4.3980 PPL=81.3 
+Val CE=4.5163 PPL=91.5
+-------------------------------------------------
+
+1. PREDICTING NEXT WORD
+  'he lives in san' francisco
+  'The capital of France is' the
+  'In the beginning' of
+  'Machine learning is' a
+
+GENERATING TEXTS
+--- Default parameters (temperature=1.0, topk=None) ---
+
+Prompt: 'In natural language processing, a Transformer'
+Generated: in natural language processing , a transformer the cpu can also variables better overhead centers , and are model values . a maximum access field purchases can require access <UNK> delivered 9 performance cpu length , whereas not of a properly affected do n't help make a warning operator or default between variables of <UNK> . solids
+
+Prompt: 'Is Stockholm the capital of Sweden? Answer yes or no. The answer is'
+Generated: is stockholm the capital of sweden ? answer yes or no . the answer is the final cause restrictions demonstrates during death . the city also realizes that any children seek out from this one unlocked by battle and out of experience all that people renounce their hands , and guilty of terrorist bodies that tend to be spared by the lords .
+
+Prompt: 'Write a Python program that reverses a list.'
+Generated: write a python program that reverses a list .
+
+--- With temperature=0.8, topk=50 ---
+
+Prompt: 'In natural language processing, a Transformer'
+Generated: in natural language processing , a transformer thus reduces a <UNK> circuit , where its frequency is the ratio , which is a signal <UNK> . a filter can be applied to an signal that uses a small magnetic field to create a compact and <UNK> . this is the case where the signal travels ( usually
+
+Prompt: 'Is Stockholm the capital of Sweden? Answer yes or no. The answer is'
+Generated: is stockholm the capital of sweden ? answer yes or no . the answer is
+
+Prompt: 'Write a Python program that reverses a list.'
+Generated: write a python program that reverses a list .
+
+--- With temperature=1.5, topk=100 ---
+
+Prompt: 'In natural language processing, a Transformer'
+Generated: in natural language processing , a transformer through a glass or loop may cause or using an `` amplifier , '' rather than a metal and ( as by each of a chain at a given mass from all objects , `` <UNK> '' , a device such as an electrical device , or simply an explosive
+
+Prompt: 'Is Stockholm the capital of Sweden? Answer yes or no. The answer is'
+Generated: is stockholm the capital of sweden ? answer yes or no . the answer is not the most obvious , but their values when we operate more on foreign entities . regardless of each ( to be , there should come , or not a solution would choose at the united states would use the term <UNK> language would often be much better than could
+
+Prompt: 'Write a Python program that reverses a list.'
+Generated: write a python program that reverses a list .
+
+
+3. COMPARING TO PRE-TRAINED OLMo-2 MODEL
+
+--- OLMo-2 predictions (temperature=0.8, topk=50) ---
+Asking to truncate to max_length but no maximum length is provided and the model has no predefined maximum length. Default to no truncation.
+
+Prompt: 'In natural language processing, a Transformer'
+Generated: In natural language processing, a Transformer architecture (Vaswani et al., 2017) can be seen as a multilayer feedforward network with the ability to automatically learn the embedding matrix, i.e., the weights linking the network to the input and output data. The
+
+Prompt: 'Is Stockholm the capital of Sweden? Answer yes or no. The answer is'
+Generated: Is Stockholm the capital of Sweden? Answer yes or no. The answer is no.
+
+How do you say Stockholm in Swedish?
+
+Stockholm (Swedish: Stockholms, pronounced [ˈstroːk ˈhɔlt̪o͡mlːz̥]) is the capital
+
+Prompt: 'Write a Python program that reverses a list.'
+Generated: Write a Python program that reverses a list. The list should be reversed in the reverse order. If a list is passed to the program, the program should return the reversed list.
+
+
+The input list must be in the form of [A, B, C, D..., N] where A and
+Inference complete!
+(.venv) spreitz@minerva:~/A1_project$ 
+
+
+

@@ -34,70 +34,50 @@ def load_model_and_tokenizer(model_dir=None, tokenizer_path=None):
         print(f"Using pre-trained model directory: {model_dir}")
     
     if tokenizer_path is None:
-        base_tokenizer = os.path.join(BASE_DIR, 'tokenizer.pkl')
         a1_tokenizer = os.path.join(A1_DIR, 'tokenizer.pkl')
+        base_tokenizer = os.path.join(BASE_DIR, 'tokenizer.pkl')
         
-        if os.path.exists(base_tokenizer):
-            tokenizer_path = base_tokenizer
-        elif os.path.exists(a1_tokenizer):
+        if os.path.exists(a1_tokenizer):
             tokenizer_path = a1_tokenizer
-        else:
+        elif os.path.exists(base_tokenizer):
             tokenizer_path = base_tokenizer
+        else:
+            tokenizer_path = a1_tokenizer
     
     print(f"Loading model from: {model_dir}")
     print(f"Loading tokenizer from: {tokenizer_path}")
     
     import pickle
+    tokenizer = None
+    
     try:
         tokenizer = A1Tokenizer.from_file(tokenizer_path)
-        print(f"✓ Tokenizer loaded (vocab_size: {len(tokenizer)})")
+        print(f"Tokenizer loaded (vocab_size: {len(tokenizer)})")
     except (AttributeError, ModuleNotFoundError) as e:
         print(f"Standard loading failed: {e}")
         print("Trying direct pickle load...")
-        with open(tokenizer_path, 'rb') as f:
-            tokenizer = pickle.load(f)
-        print(f"✓ Tokenizer loaded (vocab_size: {len(tokenizer)})")
+        try:
+            with open(tokenizer_path, 'rb') as f:
+                tokenizer = pickle.load(f)
+            print(f"Tokenizer loaded (vocab_size: {len(tokenizer)})")
+        except Exception as e2:
+            print(f"Direct pickle load also failed: {e2}")
+            if tokenizer_path != a1_tokenizer and os.path.exists(a1_tokenizer):
+                print(f"Trying fallback to A1 tokenizer: {a1_tokenizer}")
+                try:
+                    tokenizer = A1Tokenizer.from_file(a1_tokenizer)
+                    print(f"Tokenizer loaded from A1 directory (vocab_size: {len(tokenizer)})")
+                except Exception as e3:
+                    print(f"Fallback also failed: {e3}")
+                    raise
+            else:
+                raise
     
     try:
-        pytorch_model_path = os.path.join(model_dir, 'pytorch_model.bin')
-        safetensors_path = os.path.join(model_dir, 'model.safetensors')
-        
-        if os.path.exists(pytorch_model_path):
-            print(f"Found pytorch_model.bin format")
-        elif os.path.exists(safetensors_path):
-            print(f"Found model.safetensors format")
-        else:
-            print(f"⚠ Warning: No model file found in {model_dir}")
-            print(f"   Looking for: pytorch_model.bin or model.safetensors")
-        
         model = A2Transformer.from_pretrained(model_dir)
-        print(f"✓ Model loaded successfully")
-        
-        import json
-        config_path = os.path.join(model_dir, 'config.json')
-        if os.path.exists(config_path):
-            with open(config_path, 'r') as f:
-                saved_config = json.load(f)
-            if saved_config.get('architectures', [None])[0] == 'A2Transformer':
-                print(f"✓ Verified: A2Transformer model")
-            else:
-                print(f"⚠ Warning: Model architecture is {saved_config.get('architectures')}")
-        
+        print(f"Model loaded successfully")
     except Exception as e:
         print(f"Error loading model: {e}")
-        import json
-        import traceback
-        traceback.print_exc()
-        config_path = os.path.join(model_dir, 'config.json')
-        if os.path.exists(config_path):
-            with open(config_path, 'r') as f:
-                saved_config = json.load(f)
-            print(f"Config file exists with keys: {list(saved_config.keys())}")
-            required_fields = ['hidden_size', 'num_attention_heads', 'rope_theta', 
-                              'intermediate_size', 'num_hidden_layers']
-            missing = [f for f in required_fields if f not in saved_config or saved_config[f] is None]
-            if missing:
-                print(f"⚠ Missing or None config fields: {missing}")
         raise
     
     return model, tokenizer
@@ -112,12 +92,11 @@ def predict_next_word(model, tokenizer, prompt, device):
         logits = model(input_ids)
         
         last_pos = input_ids.shape[1] - 1
-        if input_ids[0, -1].item() == tokenizer.eos_token_id and input_ids.shape[1] > 1:
+        if input_ids.shape[1] > 1 and input_ids[0, -1].item() == tokenizer.eos_token_id:
             last_pos -= 1
         last_logits = logits[:, last_pos, :]
         
         predicted_idx = torch.argmax(last_logits, dim=-1).item()
-        
         predicted_word = tokenizer.id2word.get(predicted_idx, tokenizer.unk_token)
         
         return predicted_word
@@ -175,7 +154,7 @@ def load_olmo_model(local_dir='/data/courses/2025_dat450_dit247/models/OLMo-2-04
         print(f"Loading OLMo-2 model from: {local_dir}")
         tokenizer = AutoTokenizer.from_pretrained(local_dir, local_files_only=True)
         model = AutoModelForCausalLM.from_pretrained(local_dir, local_files_only=True)
-        print("✓ OLMo-2 model loaded")
+        print("OLMo-2 model loaded")
         return model, tokenizer
     except Exception as e:
         print(f"Could not load OLMo model: {e}")
@@ -230,16 +209,16 @@ if __name__ == "__main__":
     
     print(f"Using device: {device}\n")
     
-    print("="*60)
+
     print("LOADING PRE-TRAINED TRANSFORMER MODEL")
-    print("="*60)
+
     model, tokenizer = load_model_and_tokenizer()
     model.to(device)
     model.eval()
     
-    print("\n" + "="*60)
+
     print("1. PREDICTING NEXT WORD")
-    print("="*60)
+
     
     test_prompts = [
         "he lives in san",
@@ -250,11 +229,11 @@ if __name__ == "__main__":
     
     for prompt in test_prompts:
         predicted_word = predict_next_word(model, tokenizer, prompt, device)
-        print(f"  '{prompt}' → {predicted_word}")
+        print(f"  '{prompt}' {predicted_word}")
     
-    print("\n" + "="*60)
-    print("2. GENERATING TEXTS")
-    print("="*60)
+
+    print("GENERATING TEXTS")
+
     
     generation_prompts = [
         'In natural language processing, a Transformer',
