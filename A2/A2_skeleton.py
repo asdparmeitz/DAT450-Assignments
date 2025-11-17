@@ -155,8 +155,12 @@ class A2Transformer(PreTrainedModel):
         # Unembedding layer (hidden_size -> vocab_size, no bias)
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
 
-        # This line should be called after you have set up all components.
+
         self.post_init()
+        # Tie weights: share embedding and output projection (common in language models)
+        self.lm_head.weight = self.embed_tokens.weight
+        # Tell transformers about tied weights for proper saving
+        #self._tied_weights_keys = [("embed_tokens.weight", "lm_head.weight")]
 
 
     def forward(self, input_ids):

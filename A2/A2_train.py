@@ -49,9 +49,9 @@ class TrainingArguments:
         self.no_cuda = False
         self.learning_rate = 1e-4  # Reduced from 2e-3 to prevent divergence
         # TEST MODE: Quick test run (change these back for full training)
-        self.num_train_epochs = 3  # Reduced from 3 for testing
-        self.per_device_train_batch_size = 32  # Reduced from 32 for testing
-        self.per_device_eval_batch_size = 32  # Reduced from 32 for testing
+        self.num_train_epochs = 5  # Reduced from 3 for testing
+        self.per_device_train_batch_size = 64  # Reduced from 32 for testing
+        self.per_device_eval_batch_size = 64  # Reduced from 32 for testing
         self.output_dir = os.path.join(SCRIPT_DIR, 'trainer_output')
 
 class A1Trainer:
@@ -225,7 +225,7 @@ class A1Trainer:
             self.model.train()
 
         print(f'Saving to {args.output_dir}.', flush=True)
-        self.model.save_pretrained(args.output_dir)
+        self.model.save_pretrained(args.output_dir, safe_serialization=False)
 
 
 # Load dataset
@@ -331,3 +331,8 @@ if os.path.exists(saved_config_path):
         print(f"⚠ WARNING: Saved model architecture is {saved_config.get('architectures')}, expected A2Transformer!", flush=True)
 else:
     print(f"⚠ WARNING: Could not find config.json at {saved_config_path}", flush=True)
+
+## Save the model
+print(f"Saving model to {args.output_dir}...", flush=True)
+model.save_pretrained(args.output_dir, safe_serialization=False)
+print(f"Model saved to {args.output_dir}", flush=True)
