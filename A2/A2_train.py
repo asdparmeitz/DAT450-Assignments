@@ -1,7 +1,7 @@
 import torch
 import sys
 import os
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 import numpy as np
 import pickle
 import nltk
@@ -47,10 +47,11 @@ class TrainingArguments:
         self.eval_strategy = 'epoch'
         self.use_cpu = False
         self.no_cuda = False
-        self.learning_rate = 2e-3
-        self.num_train_epochs = 3
-        self.per_device_train_batch_size = 32
-        self.per_device_eval_batch_size = 32
+        self.learning_rate = 1e-4  # Reduced from 2e-3 to prevent divergence
+        # TEST MODE: Quick test run (change these back for full training)
+        self.num_train_epochs = 3  # Reduced from 3 for testing
+        self.per_device_train_batch_size = 32  # Reduced from 32 for testing
+        self.per_device_eval_batch_size = 32  # Reduced from 32 for testing
         self.output_dir = os.path.join(SCRIPT_DIR, 'trainer_output')
 
 class A1Trainer:
@@ -81,9 +82,26 @@ class A1Trainer:
         args = self.args
 
         device = self.select_device()
-        print('Device:', device)
+        print('Device:', device, flush=True)
+        
+        # Add detailed GPU information
+        if device.type == 'cuda':
+            print(f'GPU: {torch.cuda.get_device_name(0)}', flush=True)
+            print(f'GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB', flush=True)
+            print(f'CUDA Available: {torch.cuda.is_available()}', flush=True)
+            print(f'Number of GPUs: {torch.cuda.device_count()}', flush=True)
+        else:
+            print('Using CPU (no GPU available)', flush=True)
+        
         self.model.to(device)
+        
+        # Get vocab_size
         V = self.model.config.vocab_size
+        
+        # DataParallel disabled - using single GPU for stability
+        # if torch.cuda.device_count() > 1:
+        #     print(f"Using {torch.cuda.device_count()} GPUs with DataParallel!", flush=True)
+        #     self.model = torch.nn.DataParallel(self.model)
         
         loss_func = torch.nn.CrossEntropyLoss(ignore_index=self.tokenizer.pad_token_id)
 
@@ -99,26 +117,79 @@ class A1Trainer:
         for epoch in range(args.num_train_epochs):
             self.model.train()
             train_loss_sum, train_tok = 0.0, 0
+            
+            num_batches = len(train_loader)
+            print(f'\nEpoch {epoch+1}/{args.num_train_epochs} - {num_batches} batches', flush=True)
 
-            for batch in train_loader:
+            for batch_idx, batch in enumerate(train_loader):
                 texts = batch["text"]
                 enc = self.tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
                 input_ids = enc["input_ids"].to(device)
 
                 X = input_ids[:, :-1]
                 Y = input_ids[:, 1:]
+                
+                # Debug: Check for invalid token IDs and clamp if needed (only on first batch)
+                if batch_idx == 0:
+                    max_token_id_Y = Y.max().item()
+                    min_token_id_Y = Y.min().item()
+                    max_token_id_X = X.max().item()
+                    min_token_id_X = X.min().item()
+                    print(f"DEBUG: X token IDs - min: {min_token_id_X}, max: {max_token_id_X}, vocab_size: {V}", flush=True)
+                    print(f"DEBUG: Y token IDs - min: {min_token_id_Y}, max: {max_token_id_Y}, vocab_size: {V}", flush=True)
+                
+                # Safety: Clamp token IDs to valid range [0, vocab_size-1]
+                max_token_id_X = X.max().item()
+                min_token_id_X = X.min().item()
+                max_token_id_Y = Y.max().item()
+                min_token_id_Y = Y.min().item()
+                if max_token_id_X >= V or min_token_id_X < 0 or max_token_id_Y >= V or min_token_id_Y < 0:
+                    if batch_idx == 0:
+                        print(f"WARNING: Invalid token IDs detected! Clamping to valid range [0, {V-1}]", flush=True)
+                    X = torch.clamp(X, 0, V - 1)
+                    Y = torch.clamp(Y, 0, V - 1)
 
-                logits = self.model(X)
-                loss = loss_func(logits.reshape(-1, V), Y.reshape(-1))
+                # Forward pass with error handling
+                try:
+                    # Synchronize before forward pass to catch errors early
+                    torch.cuda.synchronize()
+                    logits = self.model(X)
+                    torch.cuda.synchronize()  # Sync after forward
+                    loss = loss_func(logits.reshape(-1, V), Y.reshape(-1))
+                    torch.cuda.synchronize()  # Sync after loss
+                except RuntimeError as e:
+                    if "CUDA" in str(e) or "device-side assert" in str(e):
+                        print(f"CUDA Error detected! Batch {batch_idx}", flush=True)
+                        print(f"X shape: {X.shape}, Y shape: {Y.shape}", flush=True)
+                        # Move to CPU before checking to avoid async errors
+                        X_cpu = X.cpu()
+                        Y_cpu = Y.cpu()
+                        print(f"X min/max: {X_cpu.min().item()}/{X_cpu.max().item()}, Y min/max: {Y_cpu.min().item()}/{Y_cpu.max().item()}", flush=True)
+                        print(f"X sample: {X_cpu[0, :20].tolist()}", flush=True)
+                        print(f"Y sample: {Y_cpu[0, :20].tolist()}", flush=True)
+                        raise
+                    else:
+                        raise
 
                 optimizer.zero_grad(set_to_none=True)
                 loss.backward()
+                torch.cuda.synchronize()  # Sync after backward
+                # Gradient clipping to prevent explosion
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                 optimizer.step()
+                torch.cuda.synchronize()  # Sync after optimizer step
 
                 with torch.no_grad():
-                    num_tokens = (Y != self.tokenizer.pad_token_id).sum().item()
+                    # Move to CPU before checking to avoid async CUDA errors
+                    Y_cpu = Y.cpu()
+                    num_tokens = (Y_cpu != self.tokenizer.pad_token_id).sum().item()
                     train_loss_sum += loss.item() * num_tokens
                     train_tok += num_tokens
+                
+                # Print progress every 10 batches or at the end
+                if (batch_idx + 1) % 10 == 0 or (batch_idx + 1) == num_batches:
+                    current_loss = train_loss_sum / max(1, train_tok)
+                    print(f'  Batch {batch_idx+1}/{num_batches}: Loss={current_loss:.4f}, Tokens={train_tok}', flush=True)
 
             # Validation
             self.model.eval()
@@ -129,9 +200,19 @@ class A1Trainer:
                     enc = self.tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
                     ids = enc["input_ids"].to(device)
                     Xv, Yv = ids[:, :-1], ids[:, 1:]
+                    
+                    # Safety: Clamp token IDs to valid range
+                    if Yv.max().item() >= V or Yv.min().item() < 0:
+                        Yv = torch.clamp(Yv, 0, V - 1)
+                        Xv = torch.clamp(Xv, 0, V - 1)
+                    torch.cuda.synchronize()
                     logits = self.model(Xv)
+                    torch.cuda.synchronize()
                     loss_v = loss_func(logits.reshape(-1, V), Yv.reshape(-1))
-                    num_tokens = (Yv != self.tokenizer.pad_token_id).sum().item()
+                    torch.cuda.synchronize()
+                    # Move to CPU before checking to avoid async CUDA errors
+                    Yv_cpu = Yv.cpu()
+                    num_tokens = (Yv_cpu != self.tokenizer.pad_token_id).sum().item()
                     val_loss_sum += loss_v.item() * num_tokens
                     val_tok += num_tokens
 
@@ -140,10 +221,10 @@ class A1Trainer:
             train_ppl = float(np.exp(train_ce))
             val_ppl = float(np.exp(val_ce))
 
-            print(f"Epoch {epoch+1}: train CE={train_ce:.4f} PPL={train_ppl:.1f} | val CE={val_ce:.4f} PPL={val_ppl:.1f}")
+            print(f"Epoch {epoch+1}: train CE={train_ce:.4f} PPL={train_ppl:.1f} | val CE={val_ce:.4f} PPL={val_ppl:.1f}", flush=True)
             self.model.train()
 
-        print(f'Saving to {args.output_dir}.')
+        print(f'Saving to {args.output_dir}.', flush=True)
         self.model.save_pretrained(args.output_dir)
 
 
@@ -151,8 +232,15 @@ class A1Trainer:
 dataset = load_dataset('text', data_files={'train': train_path, 'val': val_path})
 dataset = dataset.filter(lambda x: x['text'].strip() != '')
 
-train_dataset = dataset["train"]
-eval_dataset = dataset["val"]
+# TEST MODE: Limit dataset size for quick testing (remove these lines for full training)
+TEST_MODE = False  # Set to False for full training
+if TEST_MODE:
+    print("⚠️  TEST MODE: Using reduced dataset size (100 train, 50 val samples)", flush=True)
+    train_dataset = Subset(dataset["train"], range(100))  # Only 100 training samples
+    eval_dataset = Subset(dataset["val"], range(50))     # Only 50 validation samples
+else:
+    train_dataset = dataset["train"]
+    eval_dataset = dataset["val"]
 
 # Load tokenizer from A1
 # Handle pickle loading with lowercase_tokenizer available

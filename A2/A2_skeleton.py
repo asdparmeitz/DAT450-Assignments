@@ -227,7 +227,7 @@ class A2RotaryEmbedding(nn.Module):
 
 
 #### Simple test code ####
-
+"""
 if __name__ == "__main__":
     # Create a simple configuration for testing
     config = A2ModelConfig(
@@ -242,3 +242,4 @@ if __name__ == "__main__":
         rms_norm_eps=1e-6
     )
     
+"""
