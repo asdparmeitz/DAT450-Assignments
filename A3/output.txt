@@ -1,3 +1,4 @@
+
 Documents: 2000, Vocabulary size: 2525
 
 ============================================================
@@ -35,3 +36,108 @@ people, government, gun, key, law, just, don, public, use, does, like, chip, cli
 Topic 9 (coherence=-1.714):
 armenian, people, turkish, armenians, genocide, health, world, soviet, government, war, israel, national, russian, united, american, states, killed, washington, state, 
 million
+
+============================================================
+Running LDA with K=50, alpha=0.1, beta=0.1
+Iteration 10/150 finished
+Iteration 20/150 finished
+Iteration 30/150 finished
+Iteration 40/150 finished
+Iteration 50/150 finished
+Iteration 60/150 finished
+Iteration 70/150 finished
+Iteration 80/150 finished
+Iteration 90/150 finished
+Iteration 100/150 finished
+Iteration 110/150 finished
+Iteration 120/150 finished
+Iteration 130/150 finished
+Iteration 140/150 finished
+Iteration 150/150 finished
+
+Top 5 topics by UMass coherence:
+
+Topic 47 (coherence=-1.132):
+armenian, turkish, genocide, armenians, people, soviet, government, russian, armenia, muslim, turks, world, million, war, argic, serdar, population, nazi, army, political
+
+Topic 15 (coherence=-1.300):
+max, 145, 04, 14, tm, 45, 75, au, 34, mr, ma, 06, 76, hp, hr, le, 18, st, 46, mi
+
+Topic 43 (coherence=-1.406):
+17, 27, 24, 11, 10, period, 19, 34, ma, 20, sp, ah, 14, 12, 13, pp, 37, 15, 23, power
+
+Topic 5 (coherence=-1.562):
+space, orbit, launch, earth, moon, solar, high, energy, cost, mission, design, available, possible, stage, low, project, large, data, power, new
+
+Topic 8 (coherence=-1.614):
+just, think, don, like, really, lot, way, better, going, good, little, probably, makes, wrong, ve, long, bit, does, know, make
+
+============================================================
+Running LDA with K=10, alpha=0.01, beta=0.01
+Iteration 10/150 finished
+Iteration 20/150 finished
+Iteration 30/150 finished
+Iteration 40/150 finished
+Iteration 50/150 finished
+Iteration 60/150 finished
+Iteration 70/150 finished
+Iteration 80/150 finished
+Iteration 90/150 finished
+Iteration 100/150 finished
+Iteration 110/150 finished
+Iteration 120/150 finished
+Iteration 130/150 finished
+Iteration 140/150 finished
+Iteration 150/150 finished
+
+Top 5 topics by UMass coherence:
+
+Topic 7 (coherence=-1.310):
+max, 145, 17, 34, 27, 14, 24, 10, 04, 11, 75, period, ma, 18, 45, 20, 12, 25, ah, tm
+
+Topic 2 (coherence=-1.611):
+00, armenian, armenians, turkish, genocide, dos, soviet, world, russian, 50, war, people, new, muslim, armenia, government, 15, turks, 000, million
+
+Topic 6 (coherence=-1.620):
+god, people, jesus, does, think, believe, don, argument, say, know, did, true, things, christian, truth, like, example, way, read, question
+
+Topic 1 (coherence=-1.828):
+don, just, like, know, think, good, year, time, really, way, make, better, ll, going, game, right, thing, new, car, ve
+
+Topic 4 (coherence=-1.847):
+file, use, windows, output, program, problem, files, does, line, know, time, os, tape, thanks, like, need, info, using, data, help
+
+============================================================
+Running LDA with K=50, alpha=0.01, beta=0.01
+Iteration 10/150 finished
+Iteration 20/150 finished
+Iteration 30/150 finished
+Iteration 40/150 finished
+Iteration 50/150 finished
+Iteration 60/150 finished
+Iteration 70/150 finished
+Iteration 80/150 finished
+Iteration 90/150 finished
+Iteration 100/150 finished
+Iteration 110/150 finished
+Iteration 120/150 finished
+Iteration 130/150 finished
+Iteration 140/150 finished
+Iteration 150/150 finished
+
+Top 5 topics by UMass coherence:
+
+Topic 48 (coherence=-1.249):
+10, 15, 11, 20, 12, 18, period, 19, 14, 13, 16, pp, 30, 22, 21, 40, 24, 17, 28, 23
+
+Topic 17 (coherence=-1.257):
+max, 145, 04, tm, 45, 14, au, 75, 34, mr, 06, hp, ma, 76, hr, 46, 18, mi, st, mb
+
+Topic 47 (coherence=-1.264):
+armenian, turkish, armenians, genocide, people, soviet, world, muslim, government, armenia, killed, turks, russian, war, greek, muslims, million, 000, argic, serdar    
+
+Topic 31 (coherence=-1.529):
+17, 27, 24, ah, ma, sp, al, 34, 37, md, 145, air, 3d, 71, em, 11, xt, ab, 86, vs
+
+Topic 20 (coherence=-1.573):
+don, didn, think, just, ll, started, left, did, told, like, way, really, want, know, tell, time, right, people, say, wanted
