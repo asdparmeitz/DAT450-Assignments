@@ -57,8 +57,8 @@ def load_model_and_tokenizer(model_dir=None, tokenizer_path=None):
         print(f"Standard loading failed: {e}")
         print("Trying direct pickle load...")
         try:
-            with open(tokenizer_path, 'rb') as f:
-                tokenizer = pickle.load(f)
+        with open(tokenizer_path, 'rb') as f:
+            tokenizer = pickle.load(f)
             print(f"Tokenizer loaded (vocab_size: {len(tokenizer)})")
         except Exception as e2:
             print(f"Direct pickle load also failed: {e2}")
