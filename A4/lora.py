@@ -8,7 +8,7 @@ from transformers import (
     TrainingArguments,
 )
 
-from .utils import make_trainer, num_trainable_parameters
+from utils import make_trainer, num_trainable_parameters
 
 # -----------------------------------------------------------------------------
 # STUDENT TODOs
@@ -71,12 +71,16 @@ def extract_lora_targets(model):
       * Return a dict {qualified_name: module}.
     """
     # [student]: populate the dictionary with eligible layers.
+
     target_layers = {}
-    
+
     for name, module in model.named_modules():
-        if isinstance(module, nn.Linear) and ('q_proj' in name or 'v_proj' in name):
-            target_layers[name] = module
-    
+
+        if isinstance(module, nn.Linear):
+
+            if any(proj in name for proj in ['q_proj', 'v_proj']):
+                target_layers[name] = module
+
     return target_layers
 
 

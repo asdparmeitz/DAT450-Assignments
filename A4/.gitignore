@@ -8,6 +8,9 @@ __pycache__/
 # Model outputs and checkpoints
 outputs/
 
+# Log files
+logs/
+
 # Environment
 .env
 .venv
