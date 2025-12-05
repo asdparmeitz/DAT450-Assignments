@@ -10,19 +10,20 @@ __pycache__/
 *.pyd
 
 # Large model files - tracked with Git LFS (see .gitattributes)
-# *.safetensors  # Tracked with Git LFS
-# *.bin          # Tracked with Git LFS
-#trainer_output/  # Exclude directory, but files inside can be tracked if needed
-#checkpoints/
+ *.safetensors  # Tracked with Git LFS
+ *.bin          # Tracked with Git LFS
+trainer_output/  # Exclude directory, but files inside can be tracked if needed
+checkpoints/
 
 # Tokenizer files - tracked with Git LFS (see .gitattributes)
-# *.pkl          # Tracked with Git LFS
-# tokenizer.pkl  # Tracked with Git LFS
+ *.pkl          # Tracked with Git LFS
+ tokenizer.pkl  # Tracked with Git LFS
 
 # Large data files (uncomment if you don't want to push data)
 train.txt
 val.txt
 test.txt
+ori_pqal.json
 
 # Logs
 logs/
@@ -50,3 +51,7 @@ Thumbs.db
 
 # cluster files
 run_job.sh
+run.sh
+
+# vectorstore
+chroma_db/
